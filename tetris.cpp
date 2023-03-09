@@ -26,11 +26,43 @@ int main(){
         L"...."
     );
 
-    // square piece
+    // Z piece right
     tetris_shapes[2].append(
+        L"..X."
+        L".XX."
+        L".X.."
+        L"...."
+    );
+
+    // Z piece left
+    tetris_shapes[3].append(
+        L".X.."
+        L".XX."
+        L"..X."
+        L"...."
+    );
+
+    // Z piece right
+    tetris_shapes[4].append(
         L"...."
         L".XX."
+        L".X.."
+        L".X.."
+    );
+
+    // Z piece left
+    tetris_shapes[5].append(
+        L"...."
         L".XX."
+        L"..X."
+        L"..X."
+    );
+
+    // Y piece
+    tetris_shapes[5].append(
+        L"..X."
+        L".XX."
+        L"..X."
         L"...."
     );
 
