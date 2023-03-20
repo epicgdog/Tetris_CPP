@@ -2,6 +2,8 @@
 #include <Windows.h>
 #include <string>
 #include <vector>
+#include <chrono>
+#include <thread>
 
 using namespace std;
 
@@ -44,6 +46,38 @@ int Rotate(int px, int py, int r){
     // if not rotatable
     return 0;
 }
+
+// check if the piece fits in the given scenario
+// nTetromino: which type of tetromino?
+// nRotation: what is current rotation of tetromino
+// nPos: what is the location of the tetromino; the top left
+bool DoesPieceFit(int nTetromino, int nRotation, int nPosX, int nPosY){
+    
+    // loop over each piece of the tetromino
+    for (int px = 0; px < 4;  px++)
+        for (int py = 0; py < 4; py++){
+            // get index into the piece (which number is it on? cuase its like a 0-15 matrix)
+            int pi = Rotate(px, py, nRotation);
+            // get the location of the actual square of tetromino; based on its current position
+            int fi = (nPosY + py) * nFieldWidth + (nPosX + px);
+
+            // basically c++ is prone to weird memory things; prevents weird memory thingies from affecting our results
+            if (nPosX + px >= 0 && nPosX + px < nFieldWidth){
+                if (nPosY + py >= 0 && nPosY + py < nFieldHeight){
+                    // the actual collision detection
+                    // idk why but u need to make an L string with single quotes
+                    // basically, if we are in a box of the tetromino and the playing field that its on is already occupied, then there is a collision (by returning false)
+                    if (tetris_shapes[nTetromino][pi] == L'X' && pField[fi] != 0){
+                        return false;
+                    }
+
+                }
+            }
+        }
+
+    return true;
+}
+
 int main(){
     // creating the shapes
     // long piece
@@ -118,15 +152,100 @@ int main(){
     DWORD dwBytesWritten = 0;
 
     // game loop; pretty basic game loop stuff
+    
     bool bGameOver = false; 
+    // game logic includes variables that tkeep track of what is happening
+    int nCurrentPiece = 0;
+    int nCurrentRotation = 0;
+    int nCurrentX = nFieldWidth/2; 
+    int nCurrentY = 0;
+    bool bKey[4];
+    bool bRotateHold = false; // flag so no spasms when rotating so when holding doesn't spin a lot
+
+    // speed of dropping
+    int nSpeed = 20;
+    int nSpeedCounter = 0;
+    bool bForceDown = false;
 
     while (!bGameOver){
+
+        // want to focus on TIMING FIRST ===================
+        // think of it as the task.wait() in roblox lua
+        this_thread::sleep_for(50ms);
+        // want to lessen the time per forced drop right?
+        nSpeedCounter++;
+        // bForceDown illustrates the need to force the current tetromino down or not
+        bForceDown = (nSpeedCounter == nSpeed);
+
+
+        // then USER INPUT (not even event driven lol) ========================
+        // to get the key input, use getasynckeystate that tells if it is pressed or not
+        for (int k = 0; k < 4; k++){
+            // have 0 clue how this works                        R    L   D   Z
+            bKey[k] = (0x8000 & GetAsyncKeyState((unsigned char)("\x27\x25\x28Z"[k]))) != 0;
+        }
+
+        // then check collisions and tetris in the GAME LOGIC SECTION ===============
+
+        // when keys are pressed, move the tetromino accordingly
+        // using ternary bc just better :)
+        nCurrentX += (bKey[0] && DoesPieceFit(nCurrentPiece, nCurrentRotation, nCurrentX + 1, nCurrentY)) ? 1 : 0;
+        nCurrentX -= (bKey[1] && DoesPieceFit(nCurrentPiece, nCurrentRotation, nCurrentX - 1, nCurrentY)) ? 1 : 0;
+        nCurrentY += (bKey[2] && DoesPieceFit(nCurrentPiece, nCurrentRotation, nCurrentX, nCurrentY+1)) ? 1 : 0;
+        
+        if (bKey[3]){
+            nCurrentRotation += (!bRotateHold && DoesPieceFit(nCurrentPiece, nCurrentRotation + 1, nCurrentX, nCurrentY))? 1 : 0;
+            bRotateHold = true;
+        } else{
+            bRotateHold = false;
+        }
+
+        // when it needs to be forced down
+        if (bForceDown){
+            // check if can fit
+            if (DoesPieceFit(nCurrentPiece, nCurrentRotation, nCurrentX, nCurrentY+1)){
+                nCurrentY++;
+            } else {
+                // lock the current piece in the field; not movable anymore
+                 for (int px = 0; px < 4; px++)
+                    for (int py = 0; py < 4; py++){
+                        if (tetris_shapes[nCurrentPiece][Rotate(px, py, nCurrentRotation)] != L'.'){
+                            // lock in by adding it to the playing field array
+                            pField[(nCurrentY + py)*nScreenWidth + (nCurrentX + px)] = nCurrentPiece + 1;
+                        }
+                }
+                // check any horizontal lines
+                // choose the next piece
+                nCurrentX = nFieldWidth / 2;
+				nCurrentY = 0;
+				nCurrentRotation = 0;
+				nCurrentPiece = rand() % 7;
+                // if can't fit, then game over!
+                bGameOver = !DoesPieceFit(nCurrentPiece, nCurrentRotation, nCurrentX, nCurrentY);
+            }
+
+            nSpeedCounter = 0; 
+        }
+
+        //finallly want to RENDER OUTPUT
+
         // Draw playing field which includes teh whole board
         for (int x = 0; x < nFieldWidth; x++)
             for (int y = 0; y < nFieldHeight; y++)
                 // will draw whatever index character is in; so if 0 will draw the " " in " ABDCEFG=#"
                 screen[(y + 2)*nScreenWidth + (x + 2)] = L" ABCDEFG=#"[pField[y*nFieldWidth + x]];
 
+        // Draw the current piece 
+        for (int px = 0; px < 4; px++)
+            for (int py = 0; py < 4; py++){
+                // basically get teh current rotation of teh piece and determining if that space has an X or not
+                if (tetris_shapes[nCurrentPiece][Rotate(px, py, nCurrentRotation)] == L'X'){
+                    // if it does, we add it to this screen thingy that will render it
+                    // using y*width + x
+                    // adding 65 because it is the ASCII code
+                    screen[(nCurrentY + py + 2)*nScreenWidth + (nCurrentX + px + 2)] = nCurrentPiece + 65;
+                }
+            }
 
         // ouputs the characters in the pointer?
         WriteConsoleOutputCharacter(hConsole, screen, nScreenWidth * nScreenHeight, { 0,0 }, &dwBytesWritten);
